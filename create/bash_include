@@ -1,0 +1,8 @@
+# Tell me what machine I'm on:
+export PS1="\D{%H:%M %d/%b} \u@\h \W> "
+
+# any stuff which references file paths or other local complexities should be in this file,
+# which is not checked in to git.
+if [ -f ~/.bash_local ]; then
+    . ~/.bash_local
+fi
