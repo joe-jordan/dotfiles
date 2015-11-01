@@ -24,5 +24,5 @@ the same stanza to be identified, give them a separated header comment like:
 TODO
 ----
 
- * write the `makefile` / python script to install the dotfiles automagically.
+ * *(done, except uninstall)* write the `makefile` / python script to install the dotfiles automagically.
  * import .bashrc and other snippets from all my machines.
