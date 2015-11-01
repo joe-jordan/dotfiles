@@ -1,3 +1,4 @@
+# dotfiles repo will create the .bash_include symlink as a mechanism to edit this file.
 if [ -f ~/.bash_include ];
 then
     . ~/.bash_include
