@@ -4,6 +4,35 @@
 export PS1="\D{%H:%M %d/%b} \u@\h \W> "
 
 
+# local executable directories: 
+
+# add user bin dirs to path:
+export PATH=~/bin:~/.local/bin:$PATH
+
+
+# the rgrep function
+
+# recursive text file search from the current directory.
+function rgrep {
+    if [ -z "$1" ]
+    then
+        echo "please supply a search string."
+        return 1
+    fi
+    grep -rn $1 .
+}
+
+
+# Do case insensitive auto-completion:
+# THIS SETTING - it must go in .inputrc, not here.
+# set completion-ignore-case on
+
+
+# as unlimited a history as we can manage.
+export HISTSIZE=""
+export HISTFILESIZE=99999999999
+
+
 # mechanism for machine-local settings
 
 # any stuff which references file paths or other local complexities should be in this file,
@@ -11,3 +40,12 @@ export PS1="\D{%H:%M %d/%b} \u@\h \W> "
 if [ -f ~/.bash_local ]; then
     . ~/.bash_local
 fi
+
+
+# single file for alias definitions
+
+# some systems (ubuntu) source .bash_aliases by default, others don't. We guard with the INCLUDED_ALIASES variable:
+if [ -z "${INCLUDED_ALIASES+x}" && -f ~/.bash_aliases ]; then
+    . ~/.bash_aliases
+fi
+

@@ -1,0 +1,15 @@
+# Aliases
+INCLUDED_ALIASES=1
+
+# some typos and shorthands.
+alias bim='vim'
+# because hg is not as simple as svn
+alias svn_revert='hg revert --all'
+alias hg_fix_immutable='hg phase --force --draft .'
+# helps with color characters (e.g. git diff)
+alias less="less -R"
+# when the window size changes (e.g. with awesomewm)
+alias fixthis="kill -s WINCH $$"
+# local directory total size of subtree
+alias size="du -sh"
+
