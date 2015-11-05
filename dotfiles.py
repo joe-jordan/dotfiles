@@ -51,11 +51,27 @@ def fatal(_):
 is_symlink = os.path.islink
 symlink_target = os.path.realpath
 
-create_symlink = os.symlink
-remove_symlink = os.unlink
-
 # and for folder hierarchies:
 is_dir = os.path.isdir
+
+# and for generic things:
+exists = os.path.exists
+
+
+# function templates for passing to log_and_run:
+# (callable, shell_command)
+
+def append(template, target):
+    """write `template_content` to the end of the file at `target`.
+    :param template: str path to content to write.
+    :param target: str filename.
+    :return None"""
+    template_content = open(template).read()
+    append_file = open(target, 'a')
+    append_file.write("\n\n" + template_content)
+    append_file.close()
+
+append = (append, "echo $'\\n\\n' && cat %s >> %s")
 
 
 def ensure_dir_path(name, mode=None):
@@ -73,19 +89,12 @@ def ensure_dir_path(name, mode=None):
         if not (mkdir_err.errno == errno.EEXIST and is_dir(args[0])):
             raise
 
-# and for generic things:
-exists = os.path.exists
-file_copy = shutil.copyfile
 
+ensure_dir_path = (ensure_dir_path, "mkdir -p %s")
 
-def append(target, template_content):
-    """write `template_content` to the end of the file at `target`.
-    :param target: str filename.
-    :param template_content: str content to write.
-    :return None"""
-    append_file = open(target, 'a')
-    append_file.write("\n\n" + template_content)
-    append_file.close()
+create_symlink = (os.symlink, "ln -s %s %s")
+remove_symlink = (os.unlink, "rm %s")
+file_copy = (shutil.copyfile, "cp %s %s")
 
 
 def walk(path):
@@ -128,12 +137,12 @@ def install_create(template, run_and_log):
 
     # if the template is a folder:
     if is_dir(template):
-        run_and_log(ensure_dir_path, "mkdir -p", target)
+        run_and_log(ensure_dir_path, target)
         return
 
     # for files, we check whether the target file already exists:
     if not exists(target):
-        run_and_log(create_symlink, "ln -s", template, target)
+        run_and_log(create_symlink, template, target)
         return
 
     # if it does, action depends on type:
@@ -144,8 +153,8 @@ def install_create(template, run_and_log):
         # we won't delete any data by removing it, so go ahead:
         warn("symlink at %s -> %s is being replaced by link to %s." % (
             target, symlink_target(target), template))
-        run_and_log(remove_symlink, "rm", target)
-        run_and_log(create_symlink, "ln -s", template, target)
+        run_and_log(remove_symlink, "rm %s", target)
+        run_and_log(create_symlink, template, target)
         return
 
     if is_dir(target):
@@ -166,10 +175,10 @@ def install_create(template, run_and_log):
     # if identical, then there is no data lost in symlinking (and we have
     # the bonus that the file will catch new changes from the repo.)
     if target_content.strip() == template_content.strip():
-        warn("file at %s is identical to file to be installed, replacing with "
+        info("file at %s is identical to file to be installed, replacing with "
              "symlink." % target)
-        run_and_log(os.unlink, "rm", target)
-        run_and_log(create_symlink, "ln -s", template, target)
+        run_and_log(remove_symlink, target)
+        run_and_log(create_symlink, template, target)
         return
 
     # if the target is a subset of the template, we assume it is an old
@@ -179,10 +188,10 @@ def install_create(template, run_and_log):
     } - template_stanzas
 
     if not unknown_stanzas:
-        warn("file at %s is a subset of the file to be installed, assuming "
+        info("file at %s is a subset of the file to be installed, assuming "
              "safe and replacing with symlink." % target)
-        run_and_log(os.unlink, "rm", target)
-        run_and_log(create_symlink, "ln -s", template, target)
+        run_and_log(remove_symlink, target)
+        run_and_log(create_symlink, template, target)
         return
 
     # if it has any content that is not in the repo, warn the user to
@@ -200,13 +209,13 @@ def install_append(template, run_and_log):
 
     # if the template is a folder:
     if is_dir(template):
-        run_and_log(ensure_dir_path, "mkdir -p", target)
+        run_and_log(ensure_dir_path, target)
         return
 
     # if it doesn't exist, create it:
     if not exists(target):
-        warn("append-target %s does not exist: creating it." % target)
-        run_and_log(file_copy, "cp", template, target)
+        info("append-target %s does not exist: creating it." % target)
+        run_and_log(file_copy, template, target)
         return
 
     # only append the content if it isn't already there:
@@ -219,10 +228,7 @@ def install_append(template, run_and_log):
 
     if not target_stanzas & template_stanzas:
         # nothing from the template is present in the target:
-        run_and_log(append,
-                    "echo $'\\n\\n' && cat %s >> %s" % (template, target),
-                    target,
-                    template_content)
+        run_and_log(append, template, target)
         return
 
     if not template_stanzas - target_stanzas:
@@ -240,14 +246,16 @@ def install(dry_run=False):
     """perform actions to install these dotfiles, printing each action as we go.
     :param dry_run: bool *if True, only print. default False.*
     :return None"""
-    def run_and_log(function, fn_name, *arguments):
+    def run_and_log(function, *arguments):
         """print a shell representation of an action, and optionally execute it.
-        :param function: python callable *the python function to execute.*
-        :param fn_name: str *shell representation o `function`.*
+        :param function: tuple of:
+          python callable *the python function to execute.*
+          format string *the shell template representation of `function`.*
         :param arguments: tuple(str) *arguments to `function`.*"""
-        print "%s %s" % (fn_name, " ".join(arguments))
+        impl, shell_template = function
+        print shell_template % arguments
         if not dry_run:
-            function(*arguments)
+            impl(*arguments)
 
     for template in walk(create_path):
         install_create(template, run_and_log)
