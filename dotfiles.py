@@ -69,8 +69,8 @@ def ensure_dir_path(name, mode=None):
         kwargs['mode'] = mode
     try:
         os.makedirs(name, **kwargs)
-    except OSError as e:
-        if not (e.errno == errno.EEXIST and is_dir(args[0])):
+    except OSError as mkdir_err:
+        if not (mkdir_err.errno == errno.EEXIST and is_dir(args[0])):
             raise
 
 # and for generic things:
@@ -83,9 +83,9 @@ def append(target, template_content):
     :param target: str filename.
     :param template_content: str content to write.
     :return None"""
-    f = open(target, 'a')
-    f.write("\n\n" + template_content)
-    f.close()
+    append_file = open(target, 'a')
+    append_file.write("\n\n" + template_content)
+    append_file.close()
 
 
 def walk(path):
@@ -93,10 +93,10 @@ def walk(path):
     :param path: str *the path to walk*
     :return None"""
     for root, dirs, files in os.walk(path):
-        for d in dirs:
-            yield os.path.join(root, d)
-        for f in files:
-            yield os.path.join(root, f)
+        for directory in dirs:
+            yield os.path.join(root, directory)
+        for leaf in files:
+            yield os.path.join(root, leaf)
 
 
 repository_path = None
@@ -119,11 +119,128 @@ def installed_path(repo_path):
     return repo_path.replace(replace, '%s/.' % os.environ['HOME'])
 
 
+def install_create(template, run_and_log):
+    """install a path from the create/ directory
+    :param template: str *path of the repository template*
+    :param run_and_log: callable *function which logs and runs actions*
+    return: None"""
+    target = installed_path(template)
+
+    # if the template is a folder:
+    if is_dir(template):
+        run_and_log(ensure_dir_path, "mkdir -p", target)
+        return
+
+    # for files, we check whether the target file already exists:
+    if not exists(target):
+        run_and_log(create_symlink, "ln -s", template, target)
+        return
+
+    # if it does, action depends on type:
+    if is_symlink(target):
+        if symlink_target(target) == template:
+            # the file is already installed, nothing to do.
+            return
+        # we won't delete any data by removing it, so go ahead:
+        warn("symlink at %s -> %s is being replaced by link to %s." % (
+            target, symlink_target(target), template))
+        run_and_log(remove_symlink, "rm", target)
+        run_and_log(create_symlink, "ln -s", template, target)
+        return
+
+    if is_dir(target):
+        # a directory exists which clashes with the file we want to create.
+        # This is a fatal error.
+        raise fatal("directory %s clashes with file to install %s." % (
+            target, template))
+
+    # target is an ordinary file: replacing will delete data. We compare the
+    # contents of the template to the target. interpret content stanzas as
+    # separated by two consecutive line feeds.
+    target_content = open(target).read()
+    template_content = open(template).read()
+    template_stanzas = {
+        s.strip() for s in template_content.split("\n\n") if s
+    }
+
+    # if identical, then there is no data lost in symlinking (and we have
+    # the bonus that the file will catch new changes from the repo.)
+    if target_content.strip() == template_content.strip():
+        warn("file at %s is identical to file to be installed, replacing with "
+             "symlink." % target)
+        run_and_log(os.unlink, "rm", target)
+        run_and_log(create_symlink, "ln -s", template, target)
+        return
+
+    # if the target is a subset of the template, we assume it is an old
+    # version and also replace it.
+    unknown_stanzas = {
+        s.strip() for s in target_content.split("\n\n") if s
+    } - template_stanzas
+
+    if not unknown_stanzas:
+        warn("file at %s is a subset of the file to be installed, assuming "
+             "safe and replacing with symlink." % target)
+        run_and_log(os.unlink, "rm", target)
+        run_and_log(create_symlink, "ln -s", template, target)
+        return
+
+    # if it has any content that is not in the repo, warn the user to
+    # manually merge and retry install.
+    warn("file at %s has content not tracked in the repo. ignoring for now, "
+         "manually merge in and retry installing." % target)
+
+
+def install_append(template, run_and_log):
+    """install a path from the append/ directory
+    :param template: str *path of the repository template*
+    :param run_and_log: callable *function which logs and runs actions*
+    return: None"""
+    target = installed_path(template)
+
+    # if the template is a folder:
+    if is_dir(template):
+        run_and_log(ensure_dir_path, "mkdir -p", target)
+        return
+
+    # if it doesn't exist, create it:
+    if not exists(target):
+        warn("append-target %s does not exist: creating it." % target)
+        run_and_log(file_copy, "cp", template, target)
+        return
+
+    # only append the content if it isn't already there:
+    target_content = open(target).read()
+    target_stanzas = {s.strip() for s in target_content.split("\n\n") if s}
+    template_content = open(template).read()
+    template_stanzas = {
+        s.strip() for s in template_content.split("\n\n") if s
+    }
+
+    if not target_stanzas & template_stanzas:
+        # nothing from the template is present in the target:
+        run_and_log(append,
+                    "echo $'\\n\\n' && cat %s >> %s" % (template, target),
+                    target,
+                    template_content)
+        return
+
+    if not template_stanzas - target_stanzas:
+        # everything from the template is present in the target:
+        info("file at %s already contains everything to be appended." %
+             target)
+        return
+
+    warn("not appending to file %s as found a partial match with append "
+         "content. Please clean up the existing file and retry installing." %
+         target)
+
+
 def install(dry_run=False):
     """perform actions to install these dotfiles, printing each action as we go.
     :param dry_run: bool *if True, only print. default False.*
     :return None"""
-    def do(function, fn_name, *arguments):
+    def run_and_log(function, fn_name, *arguments):
         """print a shell representation of an action, and optionally execute it.
         :param function: python callable *the python function to execute.*
         :param fn_name: str *shell representation o `function`.*
@@ -133,121 +250,21 @@ def install(dry_run=False):
             function(*arguments)
 
     for template in walk(create_path):
-        target = installed_path(template)
-
-        # if the template is a folder:
-        if is_dir(template):
-            do(ensure_dir_path, "mkdir -p", target)
-            continue
-
-        # for files, we check whether the target file already exists:
-        if not exists(target):
-            do(create_symlink, "ln -s", template, target)
-            continue
-
-        # if it does, action depends on type:
-        if is_symlink(target):
-            if symlink_target(target) == template:
-                # the file is already installed, nothing to do.
-                continue
-            # we won't delete any data by removing it, so go ahead:
-            warn("symlink at %s -> %s is being replaced by link to %s." % (
-                target, symlink_target(target), template))
-            do(remove_symlink, "rm", target)
-            do(create_symlink, "ln -s", template, target)
-            continue
-
-        if is_dir(target):
-            # a directory exists which clashes with the file we want to create.
-            # This is a fatal error.
-            raise fatal("directory %s clashes with file to install %s." % (
-                target, template))
-
-        # target is an ordinary file: replacing will delete data. We compare the
-        # contents of the template to the target. interpret content stanzas as
-        # separated by two consecutive line feeds.
-        target_content = open(target).read()
-        template_content = open(template).read()
-        template_stanzas = {
-            s.strip() for s in template_content.split("\n\n") if s
-        }
-
-        # if identical, then there is no data lost in symlinking (and we have
-        # the bonus that the file will catch new changes from the repo.)
-        if target_content.strip() == template_content.strip():
-            warn("file at %s is identical to file to be installed, replacing "
-                 "with symlink." % target)
-            do(os.unlink, "rm", target)
-            do(create_symlink, "ln -s", template, target)
-            continue
-
-        # if the target is a subset of the template, we assume it is an old
-        # version and also replace it.
-        unknown_stanzas = {
-            s.strip() for s in target_content.split("\n\n") if s
-        } - template_stanzas
-
-        if not unknown_stanzas:
-            warn("file at %s is a subset of the file to be installed, assuming "
-                 "safe and replacing with symlink." % target)
-            do(os.unlink, "rm", target)
-            do(create_symlink, "ln -s", template, target)
-            continue
-
-        # if it has any content that is not in the repo, warn the user to
-        # manually merge and retry install.
-        warn("file at %s has content not tracked in the repo. ignoring for "
-             "now, manually merge in and retry installing." % target)
+        install_create(template, run_and_log)
 
     # and the append stuff:
     for template in walk(append_path):
-        target = installed_path(template)
-
-        # if the template is a folder:
-        if is_dir(template):
-            do(ensure_dir_path, "mkdir -p", target)
-            continue
-
-        # if it doesn't exist, create it:
-        if not exists(target):
-            print "WARN: append-target %s does not exist: creating it."
-            do(file_copy, "cp", template, target)
-            continue
-
-        # only append the content if it isn't already there:
-        target_content = open(target).read()
-        target_stanzas = {s.strip() for s in target_content.split("\n\n") if s}
-        template_content = open(template).read()
-        template_stanzas = {
-            s.strip() for s in template_content.split("\n\n") if s
-        }
-
-        if not target_stanzas & template_stanzas:
-            # nothing from the template is present in the target:
-            do(append,
-               "echo $'\\n\\n' && cat %s >> %s" % (template, target),
-               target,
-               template_content)
-            continue
-
-        if not template_stanzas - target_stanzas:
-            # everything from the template is present in the target:
-            info("file at %s already contains everything to be appended." %
-                 target)
-            continue
-
-        warn("not appending to file %s as found a partial match with append "
-             "content. Please clean up the existing file and retry "
-             "installing." % target)
+        install_append(template, run_and_log)
 
 
 def uninstall(dry_run=False):
     """perform actions to uninstall these dotfiles, printing each action as we
     go.
-    :param dry_run: bool *if true, only print.*
+    :param dry_run: bool *if True, only print. default False.*
     :return None"""
     # TODO
     pass
+
 
 if __name__ == "__main__":
     repository_path = os.path.dirname(__file__)
