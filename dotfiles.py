@@ -86,7 +86,7 @@ def ensure_dir_path(name, mode=None):
     try:
         os.makedirs(name, **kwargs)
     except OSError as mkdir_err:
-        if not (mkdir_err.errno == errno.EEXIST and is_dir(args[0])):
+        if not (mkdir_err.errno == errno.EEXIST and is_dir(name)):
             raise
 
 
