@@ -14,7 +14,7 @@ export PATH=~/bin:~/.local/bin:$PATH
 
 # recursive text file search from the current directory.
 function rgrep {
-    if [ -z "$1" ]
+    if [ -z "$1" ];
     then
         echo "please supply a search string."
         return 1
@@ -45,7 +45,7 @@ fi
 # single file for alias definitions
 
 # some systems (ubuntu) source .bash_aliases by default, others don't. We guard with the INCLUDED_ALIASES variable:
-if [ -z "${INCLUDED_ALIASES+x}" && -f ~/.bash_aliases ]; then
+if [ -z "${INCLUDED_ALIASES+x}" ] && [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
 fi
 
