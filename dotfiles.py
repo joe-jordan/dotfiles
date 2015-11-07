@@ -81,7 +81,7 @@ def ensure_dir_path(name, mode=None):
     :param mode: int *the mode of ownership, default 0777*
     :return None"""
     kwargs = {}
-    if mode is None:
+    if mode is not None:
         kwargs['mode'] = mode
     try:
         os.makedirs(name, **kwargs)
