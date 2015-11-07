@@ -275,7 +275,7 @@ def uninstall(dry_run=False):
 
 
 if __name__ == "__main__":
-    repository_path = os.path.dirname(__file__)
+    repository_path = os.path.dirname(os.path.realpath(__file__))
     create_path = os.path.join(repository_path, 'create')
     append_path = os.path.join(repository_path, 'append')
 
