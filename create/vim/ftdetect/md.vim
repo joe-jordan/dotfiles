@@ -1,1 +1,1 @@
-au BufRead,BufNewFile *.mdset,*.md filetype=markdown.github
+autocmd BufRead,BufNewFile *.md set filetype=markdown
