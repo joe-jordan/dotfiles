@@ -3,6 +3,7 @@ INCLUDED_ALIASES=1
 
 # some typos and shorthands.
 alias bim='vim'
+alias cim='vim'
 # because hg is not as simple as svn
 alias svn_revert='hg revert --all'
 alias hg_fix_immutable='hg phase --force --draft .'
@@ -12,4 +13,5 @@ alias less="less -R"
 alias fixthis="kill -s WINCH $$"
 # local directory total size of subtree
 alias size="du -sh"
+
 

@@ -22,6 +22,17 @@ function rgrep {
     grep -rn $1 .
 }
 
+# make and switch to new directory:
+function mkcd {
+    if [ -z "$1" ];
+    then
+        echo "please supply a directory name."
+        return 1
+    fi
+    mkdir -p $1
+    cd $1
+}
+
 
 # Do case insensitive auto-completion:
 # THIS SETTING - it must go in .inputrc, not here.
@@ -31,6 +42,9 @@ function rgrep {
 # as unlimited a history as we can manage.
 export HISTSIZE=""
 export HISTFILESIZE=99999999999
+
+# and don't add consecutive duplicate commands.
+export HISTCONTROL=ignoredups
 
 
 # mechanism for machine-local settings
