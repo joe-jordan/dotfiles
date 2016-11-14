@@ -63,3 +63,7 @@ if [ -z "${INCLUDED_ALIASES+x}" ] && [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
 fi
 
+# load the bash completion for git branches etc:
+source .git-completion
+
+
