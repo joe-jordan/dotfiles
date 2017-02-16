@@ -4,7 +4,7 @@
 export PS1="\D{%H:%M %d/%b} \u@\h \W> "
 
 
-# local executable directories: 
+# local executable directories:
 
 # add user bin dirs to path:
 export PATH=~/bin:~/.local/bin:$PATH
@@ -64,6 +64,4 @@ if [ -z "${INCLUDED_ALIASES+x}" ] && [ -f ~/.bash_aliases ]; then
 fi
 
 # load the bash completion for git branches etc:
-source .git-completion
-
-
+source ~/.git-completion
