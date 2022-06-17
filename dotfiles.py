@@ -1,5 +1,5 @@
-#!/usr/bin/python2.7
-# -*- coding: ascii -*-
+from __future__ import print_function
+from __future__ import unicode_literals
 
 import os
 import os.path
@@ -11,15 +11,15 @@ def logger(func):
     """decorator to turn `func` into a logger function of the same name.
     :param func: python callable.
     :return a new python callable."""
-    prefix = func.func_name.upper() + ":"
+    prefix = func.__name__.upper() + ":"
 
     def impl(message):
         """ logger function
         :param message: str *message to log.*"""
-        print prefix, message
+        print(prefix, message)
         func(message)
     impl.__doc__ = prefix + impl.__doc__
-    impl.func_name = func.func_name
+    impl.__name__ = func.__name__
     return impl
 
 
@@ -125,7 +125,12 @@ def installed_path(repo_path):
         raise fatal("invalid path %s" % repo_path)
     if replace[-1] != '/':
         replace += '/'
-    return repo_path.replace(replace, '%s/.' % os.environ['HOME'])
+    try:
+        # Allow override of the target path by a custom env var.
+        target_path = os.environ['DOTFILES_TARGET']
+    except KeyError:
+        target_path = os.environ['HOME']
+    return repo_path.replace(replace, '%s/.' % target_path)
 
 
 def install_create(template, run_and_log):
@@ -253,7 +258,7 @@ def install(dry_run=False):
           format string *the shell template representation of `function`.*
         :param arguments: tuple(str) *arguments to `function`.*"""
         impl, shell_template = function
-        print shell_template % arguments
+        print(shell_template % arguments)
         if not dry_run:
             impl(*arguments)
 

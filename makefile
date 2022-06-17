@@ -1,12 +1,12 @@
 default:
-	python2.7 dotfiles.py -p install
+	python dotfiles.py -p install
 
 install:
-	python2.7 dotfiles.py install
+	python dotfiles.py install
 
 uninstall:
-	python2.7 dotfiles.py uninstall
+	python dotfiles.py uninstall
 
 demo_uninstall:
-	python2.7 dotfiles.py -p uninstall
+	python dotfiles.py -p uninstall
 
